@@ -2,13 +2,14 @@
 @inject IInverterManagerService inverterManagerService
 @inject IDialogService dialogService
 @inject ISnackbar snackBar
+@inject ILocalStorageService localStorage
 
 @implements IDisposable
 
 <PageTitle>Solis Manager</PageTitle>
 
 <div class="strategy-table @DarkModeStyle">
-    <TopStatusBar PageTitle="Charging Plan" @bind-SelectedView="selectedView" ViewSettingName="plan-view">
+    <TopStatusBar PageTitle="Charging Plan" @bind-SelectedView="selectedView" ViewSettingName="plan-view" LoadSavedView="false">
         <ChildContent>
             @if (isSimulateMode)
             {
@@ -41,12 +42,15 @@
     </TopStatusBar>
     
     <div class="table-chart">
-        @if (selectedView == ViewSelector.ViewType.Chart)
+        @if (viewPreferenceLoaded && chartCreated)
         {
-            <PlanGraph ChartData="inverterManagerService.InverterState.Prices"/>
+            <div style="display:@(selectedView == ViewSelector.ViewType.Chart ? "block" : "none"); height:100%">
+                <PlanGraph ChartData="inverterManagerService.InverterState.Prices" Config="planConfig"/>
+            </div>
         }
-        else
+        @if (viewPreferenceLoaded && gridCreated)
         {
+            <div style="display:@(selectedView == ViewSelector.ViewType.Grid ? "block" : "none"); height:100%">
             <MudTable T="PricePlanSlot" Items="inverterManagerService.InverterState.Prices" FixedHeader="true" 
                       GroupBy="_groupDefinition" Dense="true" Breakpoint="Breakpoint.None" Height="100%">
                 <ColGroup>
@@ -101,6 +105,7 @@
                     }
                 </RowTemplate>
             </MudTable>
+            </div>
         }
     </div>
 
@@ -190,7 +195,21 @@
     private bool isSimulateMode = false;
     private bool manualOverridesExist = false;
     private decimal forecastDamping = 1M;
-    private ViewSelector.ViewType selectedView = ViewSelector.ViewType.Grid;
+    private ViewSelector.ViewType currentView = ViewSelector.ViewType.Grid;
+    private ViewSelector.ViewType selectedView
+    {
+        get => currentView;
+        set
+        {
+            currentView = value;
+            if (value == ViewSelector.ViewType.Chart) chartCreated = true;
+            else gridCreated = true;
+        }
+    }
+    private bool viewPreferenceLoaded;
+    private bool gridCreated;
+    private bool chartCreated;
+    private SolisManagerConfig? planConfig;
     private string PriceStyle(PricePlanSlot planSlot) => $"text-align:center;";
     
     private async Task ChangeSlotAction(ManualOverrideRequest req)
@@ -260,6 +279,7 @@
     protected override async Task OnInitializedAsync()
     {
         var config = await inverterManagerService.GetConfig();
+        planConfig = config;
 
         if (config.Simulate != isSimulateMode || config.SolcastDampFactor != forecastDamping)
         {
@@ -273,5 +293,20 @@
         _ = RunTimer();
 
         await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var setting = await localStorage.GetItemAsync<string>("plan-view");
+            if (Enum.TryParse<ViewSelector.ViewType>(setting, out var savedView))
+                selectedView = savedView;
+            else
+                selectedView = ViewSelector.ViewType.Grid;
+            viewPreferenceLoaded = true;
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
     }
 }

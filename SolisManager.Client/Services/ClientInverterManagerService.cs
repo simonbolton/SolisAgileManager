@@ -9,10 +9,22 @@ namespace SolisManager.Client.Services;
 public class ClientInverterManagerService( HttpClient httpClient, ILogger<ClientInverterManagerService> logger ) : IInverterManagerService
 {
     public SolisManagerState InverterState { get; private set; } = new();
+    private readonly object requestLock = new();
+    private Task? refreshTask;
+    private Task<SolisManagerConfig>? configTask;
 
-    public async Task RefreshInverterState()
+    public Task RefreshInverterState()
     {
-        // Load the data from the server
+        lock (requestLock)
+        {
+            if (refreshTask == null || refreshTask.IsCompleted)
+                refreshTask = RefreshInternal();
+            return refreshTask;
+        }
+    }
+
+    private async Task RefreshInternal()
+    {
         var state = await httpClient.GetFromJsonAsync<SolisManagerState?>("inverter/refreshinverterdata");
         if (state != null)
             InverterState = state;
@@ -63,7 +75,17 @@ public class ClientInverterManagerService( HttpClient httpClient, ILogger<Client
         return [];
     }
 
-    public async Task<SolisManagerConfig> GetConfig()
+    public Task<SolisManagerConfig> GetConfig()
+    {
+        lock (requestLock)
+        {
+            if (configTask == null || configTask.IsFaulted || configTask.IsCanceled)
+                configTask = LoadConfig();
+            return configTask;
+        }
+    }
+
+    private async Task<SolisManagerConfig> LoadConfig()
     {
         var result = await httpClient.GetFromJsonAsync<SolisManagerConfig>("inverter/getconfig");
         
@@ -87,6 +109,8 @@ public class ClientInverterManagerService( HttpClient httpClient, ILogger<Client
             throw;
         }
         var response = await httpClient.PostAsync($"inverter/saveconfig?configJson={json}", null);
+        lock (requestLock)
+            configTask = null;
 
         if (response.IsSuccessStatusCode)
         {
