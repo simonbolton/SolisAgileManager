@@ -6,7 +6,7 @@
     @if (Options != null && ChartData != null && ChartData.Any())
     {
         <div class="chart-area">
-            <GraphActionLegend ChartTitle="Charging Strategy Graph"/>
+            <GraphActionLegend ChartTitle="Charging Strategy Graph" Config="Config"/>
             <ApexChart @ref="chart" TItem="PricePlanSlot" 
                        XAxisType="XAxisType.Datetime"
                        Options="@Options"
@@ -27,6 +27,7 @@
 
 @code {
     [Parameter] public IEnumerable<PricePlanSlot> ChartData { get; set; } = [];
+    [Parameter] public SolisManagerConfig? Config { get; set; }
     
     private string FormatYAxisLabel(decimal val) => val == (int)val ? $"{val:F0}" : $"{val:F2}";
 

@@ -21,6 +21,8 @@
     
     [Parameter] public string? SettingName { get; set; }
 
+    [Parameter] public bool LoadSavedView { get; set; } = true;
+
     [Parameter] public ViewType SelectedView { get; set; } = ViewType.Chart;
     
     [Parameter] public EventCallback<ViewType> SelectedViewChanged { get; set; }
@@ -31,7 +33,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && ! string.IsNullOrEmpty(SettingName))
+        if (firstRender && LoadSavedView && ! string.IsNullOrEmpty(SettingName))
         {
             var setting = await localStorage.GetItemAsync<string>(SettingName);
 
